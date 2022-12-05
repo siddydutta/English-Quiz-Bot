@@ -23,6 +23,10 @@ def get_quiz_questions(n):
     return [question for question in db.questions.find({'used': False}).limit(n)]
 
 
+def add_quiz_question(question):
+    db.questions.insert_one(question)
+
+
 def update_question(question_id, poll_id, quiz_id):
     update = {'used': True, 'poll_id': poll_id, 'quiz_id': quiz_id}
     db.questions.update_one({'_id': question_id}, {'$set': update})
