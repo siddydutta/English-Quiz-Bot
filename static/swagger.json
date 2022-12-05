@@ -1,0 +1,84 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "description": "English Quiz Bot",
+    "version": "1.0.0",
+    "title": "English-Quiz-Bot",
+    "contact": {
+      "email": "siddharthadutta@protonmail.com"
+    }
+  },
+  "tags": [
+    {
+      "name": "Quiz",
+      "description": "APIs to manage quizzes in the database."
+    }
+  ],
+  "paths": {
+    "/add-question": {
+      "post": {
+        "tags": [
+          "Quiz"
+        ],
+        "summary": "Add a new book quiz question.",
+        "requestBody": {
+          "description": "Add Question Post Object",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/addQuestionPostBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "500": {
+            "description": "Failed to add."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "addQuestionPostBody": {
+        "type": "object",
+        "required": ["quiz_no", "question", "options", "correct_option_id"],
+        "properties": {
+          "quiz_no": {
+            "type": "integer",
+            "example": 1,
+            "description": "Quiz number to which the question belongs."
+          },
+          "question": {
+            "type": "string",
+            "example": "__ do you live?",
+            "description": "Quiz prompt."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["When", "What", "Why", "Where"],
+            "description": "Array of strings of possible answers."
+          },
+          "correct_option_id": {
+            "type": "integer",
+            "example": 3,
+            "description": "0-based index of correct option in options."
+          },
+          "explanation": {
+            "type": "string",
+            "example": "Asking about location.",
+            "description": "Optional explanation of the correct answer."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,15 +1,37 @@
 import bson
 
 from flask import Flask, request
-from quiz_db import get_quiz_questions, update_question, add_poll, get_poll, add_answer
+from flask_swagger_ui import get_swaggerui_blueprint
+from quiz_db import get_quiz_questions, update_question, add_poll, get_poll, add_answer, add_quiz_question
 from bot import send_poll
 
 app = Flask(__name__)
+# START Swagger Specification #
+SWAGGER_URL = '/swagger'
+API_URL = '/static/swagger.json'
+SWAGGERUI_BLUEPRINT = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={
+        'app_name': "English-Quiz-Bot"
+    }
+)
+app.register_blueprint(SWAGGERUI_BLUEPRINT, url_prefix=SWAGGER_URL)
+# END Swagger Specification #
 
 
 @app.route('/')
 def hello_world():
     return 'App is running'
+
+
+@app.route('/add-question', methods=['POST'])
+def add_question():
+    try:
+        add_quiz_question(request.json)
+    except:
+        return 'not added', 500
+    return 'ok', 200
 
 
 # TODO Should use BackgroundScheduler or cron job to invoke endpoint?

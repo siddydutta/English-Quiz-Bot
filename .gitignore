@@ -10,3 +10,6 @@ venv/
 # Custom Scripts
 script.py
 test.py
+
+# System Files
+.DS_Store
