@@ -3,9 +3,9 @@ from datetime import datetime
 from flask import Flask, request
 from flask_swagger_ui import get_swaggerui_blueprint
 
-from bot import send_poll, stop_poll
+from bot import send_poll, stop_poll, send_message
 from quiz_db import get_quiz_questions, add_poll, get_poll, add_answer, add_quiz_question, get_active_polls, \
-    update_poll_status
+    update_poll_status, get_leaderboard
 
 app = Flask(__name__)
 
@@ -86,6 +86,17 @@ def process_poll_answer_update():
               'answered': datetime.utcnow()}
     add_answer(answer)
     return '', 200
+
+
+@app.route('/leaderboard', methods=['GET'])
+def leaderboard():
+    quiz_no = int(request.args.get('quiz_no'))
+    results = get_leaderboard(quiz_no)
+    text = f"Leaderboard for Quiz: {quiz_no}\n"
+    for index, result in enumerate(results, start=1):
+        text += f"{index}. {result.get('name')}\t{result.get('total_score')}\n"
+    send_message(text)
+    return text, 200
 
 
 if __name__ == '__main__':

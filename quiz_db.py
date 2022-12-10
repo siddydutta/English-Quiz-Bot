@@ -47,3 +47,29 @@ def update_poll_status(quiz_no: int):
 
 def add_answer(answer):
     db.answers.insert_one(answer)
+
+
+def get_leaderboard(quiz_no: int):
+    return [score for score in db.answers.aggregate([
+        {
+            '$match': {
+                'quiz_no': quiz_no
+            }
+        }, {
+            '$group': {
+                '_id': '$user.id',
+                'total_score': {
+                    '$sum': '$score'
+                },
+                'name': {
+                    '$first': '$user.first_name'
+                }
+            }
+        }, {
+            '$sort': {
+                'total_score': -1
+            }
+        }, {
+            '$limit': 3
+        }
+    ])]

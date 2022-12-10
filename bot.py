@@ -30,3 +30,13 @@ def stop_poll(message_id):
     response = requests.get(BASE_URL + '/stopPoll', data=parameters)
     response_json = response.json()
     return response_json.get('result')
+
+
+def send_message(message_text):
+    parameters = {
+        'chat_id': GROUP_ID,
+        'text': message_text
+    }
+    response = requests.get(BASE_URL + '/sendMessage', data=parameters)
+    response_json = response.json()
+    return response_json.get('result')
