@@ -1,26 +1,14 @@
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 from flask import Flask, request
-from flask_swagger_ui import get_swaggerui_blueprint
 
 from bot import send_poll, stop_poll, send_message
-from quiz_db import get_quiz_questions, add_poll, get_poll, add_answer, add_quiz_question, get_active_polls, \
-    update_poll_status, get_leaderboard
+from quiz_db import add_poll, get_poll, add_answer, get_active_polls, \
+    update_poll_status, get_leaderboard, get_quiz, update_quiz
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
-
-# START Swagger Specification #
-SWAGGER_URL = '/swagger'
-API_URL = '/static/swagger.json'
-SWAGGERUI_BLUEPRINT = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={
-        'app_name': 'English-Quiz-Bot'
-    }
-)
-app.register_blueprint(SWAGGERUI_BLUEPRINT, url_prefix=SWAGGER_URL)
-# END Swagger Specification #
 
 
 @app.route('/')
@@ -28,41 +16,49 @@ def hello_world():
     return 'App is running'
 
 
-@app.route('/add-question', methods=['POST'])
-def add_question():
-    try:
-        add_quiz_question(request.json)
-    except Exception as e:
-        print(e)
-        return 'not added', 500
-    return 'ok', 200
-
-
 @app.route('/start-quiz', methods=['GET'])
 def start_quiz():
-    quiz_no = int(request.args.get('quiz_no'))
-    questions = get_quiz_questions(quiz_no)
-    for question in questions:
-        result = send_poll(question.get('question'), question.get('options'), question.get('correct_option_id'),
-                           question.get('explanation'))
-        poll = {'poll_id': result.get('poll').get('id'),
+    with app.app_context():
+        quiz = get_quiz()
+        for question in quiz.get('questions'):
+            result = send_poll(question.get('prompt'),
+                               question.get('options'),
+                               question.get('correct_option_id'),
+                               question.get('explanation'))
+            poll = {
+                'poll_id': result.get('poll').get('id'),
                 'message_id': result.get('message_id'),
                 'correct_option_id': question.get('correct_option_id'),
-                'quiz_no': quiz_no,
-                'posted': datetime.utcnow(),
-                'active': True}
-        add_poll(poll)
-    return 'ok', 200
+                'quiz_no': quiz.get('quiz_no'),
+                'active': True
+            }
+            add_poll(poll)
+        # TODO Enable update_quiz and scheduler
+        # update_quiz(quiz)
+        # scheduler.add_job(end_quiz, trigger='date', run_date=datetime.now() + timedelta(hours=10), args = [quiz.get('quiz_no')])
+        return 'ok', 200
+
+
+scheduler = BackgroundScheduler()
+# TODO Enable scheduler
+# scheduler.add_job(start_quiz, trigger='cron', hour='09', minute='30')
+scheduler.start()
 
 
 @app.route('/stop-quiz', methods=['PUT'])
 def stop_quiz():
-    quiz_no = int(request.args.get('quiz_no'))
-    polls = get_active_polls(quiz_no)
-    for poll in polls:
-        stop_poll(poll.get('message_id'))
-    update_poll_status(quiz_no)
-    return '', 200
+    end_quiz(int(request.args.get("quiz_no")))
+    return 'ok', 200
+
+
+def end_quiz(quiz_no):
+    with app.app_context():
+        print("Ending quiz", quiz_no)
+        polls = get_active_polls(quiz_no)
+        for poll in polls:
+            stop_poll(poll.get('message_id'))
+        update_poll_status(quiz_no)
+        return '', 200
 
 
 @app.route('/webhook-poll-answer', methods=['POST'])
@@ -92,9 +88,25 @@ def process_poll_answer_update():
 def leaderboard():
     quiz_no = int(request.args.get('quiz_no'))
     results = get_leaderboard(quiz_no)
-    text = f"Leaderboard for Quiz: {quiz_no}\n"
-    for index, result in enumerate(results, start=1):
-        text += f"{index}. {result.get('name')}\t{result.get('total_score')}\n"
+    print(results)
+    score_map = defaultdict(list)
+    for result in results:
+        username = result.get('username')
+        firstname = result.get('firstname')
+        score_map[result.get('total_score')].append('@'+username if username else firstname)
+    print(score_map)
+    five = " ".join(score_map.get(5, []))
+    four = " ".join(score_map.get(4, []))
+    three = " ".join(score_map.get(3, []))
+    text = f"Thank you for participating in today's Daily Quiz! 🥳🎉🎉🎉\n\n" \
+           f"🥇 Jobcoachers who got 5/5 Questions correct ⭐⭐⭐⭐⭐:\n" \
+           f"{five}\n\n" \
+           f"🥈 Jobcoachers who got 4/5 Questions correct ⭐⭐⭐⭐:\n" \
+           f"{four}\n\n" \
+           f"🥉 Jobcoachers who got 3/5 Questions correct ⭐⭐⭐:\n" \
+           f"{three}\n\n" \
+           f"Congratulations Jobcoachers! 👏🎊" \
+           f"Keep it up and practice more. 📚"
     send_message(text)
     return text, 200
 

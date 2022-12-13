@@ -20,12 +20,15 @@ def get_db():
 db = LocalProxy(get_db)
 
 
-def get_quiz_questions(quiz_no: int):
-    return [question for question in db.questions.find({'quiz_no': quiz_no})]
+def get_quiz():
+    return db.questions.find_one({'used': None})
 
 
-def add_quiz_question(question):
-    db.questions.insert_one(question)
+def update_quiz(quiz):
+    db.questions.update_one({'_id': quiz.get('_id')}, {'$set': {
+        'used': True,
+        'posted': datetime.utcnow()
+    }})
 
 
 def add_poll(poll):
@@ -61,15 +64,13 @@ def get_leaderboard(quiz_no: int):
                 'total_score': {
                     '$sum': '$score'
                 },
-                'name': {
+                'firstname': {
                     '$first': '$user.first_name'
+                },
+                'username': {
+                    '$first': '$user.username'
                 }
             }
-        }, {
-            '$sort': {
-                'total_score': -1
-            }
-        }, {
-            '$limit': 3
         }
     ])]
+
