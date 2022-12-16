@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -20,8 +21,11 @@ def hello_world():
 def start_quiz():
     with app.app_context():
         quiz = get_quiz()
-        for question in quiz.get('questions'):
-            result = send_poll(question.get('prompt'),
+        questions = quiz.get('questions')
+        for index, question in enumerate(questions, start=1):
+            prompt = f"Question [{index}/{len(questions)}]: {question.get('prompt')}"
+            print(prompt)
+            result = send_poll(prompt,
                                question.get('options'),
                                question.get('correct_option_id'),
                                question.get('explanation'))
@@ -33,22 +37,22 @@ def start_quiz():
                 'active': True
             }
             add_poll(poll)
-        # TODO Enable update_quiz and scheduler
         # update_quiz(quiz)
-        # scheduler.add_job(end_quiz, trigger='date', run_date=datetime.now() + timedelta(hours=10), args = [quiz.get('quiz_no')])
+        quiz_expiration_time = float(os.environ.get('QUIZ_EXPIRATION', 10))
+        scheduler.add_job(end_quiz, trigger='date', run_date=datetime.now() + timedelta(hours=quiz_expiration_time),
+                          args=[quiz.get('quiz_no')])
         return 'ok', 200
 
 
 scheduler = BackgroundScheduler()
-# TODO Enable scheduler
-# scheduler.add_job(start_quiz, trigger='cron', hour='09', minute='30')
+# TODO Config scheduler
+scheduler.add_job(start_quiz, trigger='cron', hour='11', minute='30')
 scheduler.start()
 
 
 @app.route('/stop-quiz', methods=['PUT'])
 def stop_quiz():
-    end_quiz(int(request.args.get("quiz_no")))
-    return 'ok', 200
+    return end_quiz(int(request.args.get('quiz_no')))
 
 
 def end_quiz(quiz_no):
@@ -58,6 +62,7 @@ def end_quiz(quiz_no):
         for poll in polls:
             stop_poll(poll.get('message_id'))
         update_poll_status(quiz_no)
+        leaderboad(quiz_no)
         return '', 200
 
 
@@ -84,9 +89,13 @@ def process_poll_answer_update():
     return '', 200
 
 
-@app.route('/leaderboard', methods=['GET'])
-def leaderboard():
+@app.route('/send-leaderboard', methods=['GET'])
+def send_leaderboard():
     quiz_no = int(request.args.get('quiz_no'))
+    return leaderboad(quiz_no)
+
+
+def leaderboad(quiz_no):
     results = get_leaderboard(quiz_no)
     print(results)
     score_map = defaultdict(list)

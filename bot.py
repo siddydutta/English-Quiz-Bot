@@ -2,14 +2,13 @@ import os
 import json
 import requests
 
-GROUP_ID = os.environ.get('GROUP_ID')
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 BASE_URL = f'https://api.telegram.org/bot{BOT_TOKEN}'
 
 
 def send_poll(prompt, options, correct_index, explanation):
     parameters = {
-        'chat_id': GROUP_ID,
+        'chat_id': os.environ.get('GROUP_ID'),
         'question': prompt,
         'options': json.dumps(options),
         'is_anonymous': False,
@@ -24,7 +23,7 @@ def send_poll(prompt, options, correct_index, explanation):
 
 def stop_poll(message_id):
     parameters = {
-        'chat_id': GROUP_ID,
+        'chat_id': os.environ.get('GROUP_ID'),
         'message_id': message_id
     }
     response = requests.get(BASE_URL + '/stopPoll', data=parameters)
@@ -34,7 +33,7 @@ def stop_poll(message_id):
 
 def send_message(message_text):
     parameters = {
-        'chat_id': GROUP_ID,
+        'chat_id': os.environ.get('GROUP_ID'),
         'text': message_text
     }
     response = requests.get(BASE_URL + '/sendMessage', data=parameters)
