@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 import requests
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
