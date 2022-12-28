@@ -52,8 +52,11 @@ def start_quiz():
 
 
 scheduler = BackgroundScheduler()
-# Start a new quiz every day at 11:00 AM IST
-scheduler.add_job(start_quiz, trigger='cron', hour='05', minute='30')
+# Start a new quiz every day at 4:00 PM IST
+scheduler.add_job(start_quiz,
+                  trigger='cron',
+                  hour=os.environ.get('QUIZ_START_HOUR', 10),
+                  minute=os.environ.get('QUIZ_START_MINUTE', 30))
 scheduler.start()
 
 

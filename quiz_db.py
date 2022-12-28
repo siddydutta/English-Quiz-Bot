@@ -22,7 +22,7 @@ db = LocalProxy(get_db)
 
 def get_quiz():
     # get one unused quiz
-    return db.quiz_bank.find_one({'used': None})
+    return db.quiz_bank.find_one({'used': None}, sort=[('quiz_no', 1)])
 
 
 def update_quiz(quiz):
