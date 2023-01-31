@@ -5,11 +5,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, request
 
 from bot import send_poll, stop_poll, send_message
-from quiz_db import add_poll, get_poll, get_active_polls, \
-    update_poll_status, get_quiz, update_quiz, update_quiz_engagement, update_quiz_session, \
-    get_quiz_results
+from db import Database
 
 app = Flask(__name__)
+DB = Database()
 
 
 @app.route('/')
@@ -20,7 +19,7 @@ def hello_world():
 @app.route('/start-quiz', methods=['GET'])
 def start_quiz():
     with app.app_context():
-        quiz = get_quiz()
+        quiz = DB.get_quiz()
         if quiz is None:
             return 'no quiz found', 422
         questions = quiz.get('questions')
@@ -33,16 +32,14 @@ def start_quiz():
                                question.get('correct_option_id'),
                                question.get('explanation'))
             poll = {
-                'quiz_id': quiz.get('_id'),
                 'poll_id': result.get('poll').get('id'),
                 'message_id': result.get('message_id'),
                 'correct_option_id': question.get('correct_option_id'),
                 'quiz_no': quiz.get('quiz_no'),
-                'question_no': index,
-                'active': True
+                'question_no': index
             }
-            add_poll(poll)
-        update_quiz(quiz)
+            DB.add_poll(poll)
+        DB.update_quiz(quiz)
         quiz_expiration_time = float(os.environ.get('QUIZ_EXPIRATION', 10))
         scheduler.add_job(end_quiz,
                           trigger='date',
@@ -68,10 +65,10 @@ def stop_quiz():
 def end_quiz(quiz_no):
     with app.app_context():
         print("ending quiz", quiz_no)
-        polls = get_active_polls(quiz_no)
+        polls = DB.get_active_polls()
         for poll in polls:
             stop_poll(poll.get('message_id'))
-        update_poll_status(quiz_no)
+            DB.update_poll_status(poll)
         print("ended quiz", quiz_no)
         return leaderboad(quiz_no)
 
@@ -84,19 +81,18 @@ def process_poll_answer_update():
         return '', 204
 
     poll_answer = update['poll_answer']
-    poll = get_poll(poll_answer.get('poll_id'))
+    poll = DB.get_poll(poll_answer.get('poll_id'))
 
     selected_option = poll_answer.get('option_ids')[0]
     score = int(poll.get('correct_option_id') == selected_option)  # 1 or 0
 
-    update_quiz_engagement(poll.get('quiz_id'),
+    DB.update_quiz_engagement(poll.get('quiz_no'),
+                              poll.get('question_no'),
+                              score)
+    DB.update_quiz_session(poll.get('quiz_no'),
                            poll.get('question_no'),
+                           poll_answer.get('user'),
                            score)
-    update_quiz_session(poll.get('quiz_id'),
-                        poll.get('quiz_no'),
-                        poll.get('question_no'),
-                        poll_answer.get('user'),
-                        score)
     return '', 200
 
 
@@ -107,13 +103,7 @@ def send_leaderboard():
 
 
 def leaderboad(quiz_no):
-    results = get_quiz_results(quiz_no)
-    score_map = {}
-    for result in results:
-        users = []
-        for user in result.get('users'):
-            users.append('@' + user.get('username') if user.get('username') else user.get('first_name', ''))
-        score_map[result.get('total_score')] = users
+    score_map = DB.get_quiz_results(quiz_no)
 
     five = " ".join(score_map.get(5, []))
     four = " ".join(score_map.get(4, []))
