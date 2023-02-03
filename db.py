@@ -55,7 +55,7 @@ class Database:
 
     def get_poll(self, poll_id):
         response = self.quiz_polls.get_item(Key={'poll_id': poll_id})
-        print(response)
+        # print(response)
         return response['Item']
 
     def update_quiz_engagement(self, quiz_no, question_no, score):

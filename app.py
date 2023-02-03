@@ -6,6 +6,7 @@ from flask import Flask, request
 
 from bot import send_poll, stop_poll, send_message
 from db import Database
+from update import process_updates
 
 app = Flask(__name__)
 DB = Database()
@@ -68,32 +69,30 @@ def end_quiz(quiz_no):
         polls = DB.get_active_polls()
         for poll in polls:
             stop_poll(poll.get('message_id'))
+        # TODO Use Polls instead of retrieving repeatedly
+        process_poll_answers()
+        for poll in polls:
             DB.update_poll_status(poll)
         print("ended quiz", quiz_no)
         return leaderboad(quiz_no)
 
 
-@app.route('/webhook-poll-answer', methods=['POST'])
-def process_poll_answer_update():
-    update = request.json
-    if 'poll_answer' not in update:
-        # Don't process other updates
-        return '', 204
+def process_poll_answers():
+    updates = process_updates()
+    for update in updates:
+        poll_answer = update['poll_answer']
+        poll = DB.get_poll(poll_answer.get('poll_id'))
 
-    poll_answer = update['poll_answer']
-    poll = DB.get_poll(poll_answer.get('poll_id'))
+        selected_option = poll_answer.get('option_ids')[0]
+        score = int(poll.get('correct_option_id') == selected_option)  # 1 or 0
 
-    selected_option = poll_answer.get('option_ids')[0]
-    score = int(poll.get('correct_option_id') == selected_option)  # 1 or 0
-
-    DB.update_quiz_engagement(poll.get('quiz_no'),
-                              poll.get('question_no'),
-                              score)
-    DB.update_quiz_session(poll.get('quiz_no'),
-                           poll.get('question_no'),
-                           poll_answer.get('user'),
-                           score)
-    return '', 200
+        DB.update_quiz_engagement(poll.get('quiz_no'),
+                                  poll.get('question_no'),
+                                  score)
+        DB.update_quiz_session(poll.get('quiz_no'),
+                               poll.get('question_no'),
+                               poll_answer.get('user'),
+                               score)
 
 
 @app.route('/send-leaderboard', methods=['GET'])
