@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, request
 
+from db import Database
 from bot import send_poll, stop_poll, send_message
-from quiz_db import add_poll, get_poll, get_active_polls, \
-    update_poll_status, get_quiz, update_quiz, update_quiz_engagement, update_quiz_session, \
-    get_quiz_results
+from update import process_updates
 
 app = Flask(__name__)
+DB = Database()
 
 
 @app.route('/')
@@ -20,7 +20,7 @@ def hello_world():
 @app.route('/start-quiz', methods=['GET'])
 def start_quiz():
     with app.app_context():
-        quiz = get_quiz()
+        quiz = DB.get_quiz()
         if quiz is None:
             return 'no quiz found', 422
         questions = quiz.get('questions')
@@ -33,16 +33,14 @@ def start_quiz():
                                question.get('correct_option_id'),
                                question.get('explanation'))
             poll = {
-                'quiz_id': quiz.get('_id'),
                 'poll_id': result.get('poll').get('id'),
                 'message_id': result.get('message_id'),
                 'correct_option_id': question.get('correct_option_id'),
                 'quiz_no': quiz.get('quiz_no'),
-                'question_no': index,
-                'active': True
+                'question_no': index
             }
-            add_poll(poll)
-        update_quiz(quiz)
+            DB.add_poll(poll)
+        DB.update_quiz(quiz)
         quiz_expiration_time = float(os.environ.get('QUIZ_EXPIRATION', 10))
         scheduler.add_job(end_quiz,
                           trigger='date',
@@ -68,36 +66,48 @@ def stop_quiz():
 def end_quiz(quiz_no):
     with app.app_context():
         print("ending quiz", quiz_no)
-        polls = get_active_polls(quiz_no)
+        polls = DB.get_active_polls()
+        poll_map = {poll['poll_id']: poll for poll in polls}
+
         for poll in polls:
             stop_poll(poll.get('message_id'))
-        update_poll_status(quiz_no)
+        process_poll_answers(poll_map, quiz_no)
+
+        for poll in polls:
+            DB.update_poll_status(poll)
         print("ended quiz", quiz_no)
         return leaderboad(quiz_no)
 
 
-@app.route('/webhook-poll-answer', methods=['POST'])
-def process_poll_answer_update():
-    update = request.json
-    if 'poll_answer' not in update:
-        # Don't process other updates
-        return '', 204
+def process_poll_answers(poll_map, quiz_no):
+    updates = process_updates()
+    engagement, correct_answers = [0] * 5, [0] * 5
+    user_answers = dict()
 
-    poll_answer = update['poll_answer']
-    poll = get_poll(poll_answer.get('poll_id'))
+    for update in updates:
+        try:
+            poll_answer = update['poll_answer']
+            poll = poll_map[poll_answer.get('poll_id')]
 
-    selected_option = poll_answer.get('option_ids')[0]
-    score = int(poll.get('correct_option_id') == selected_option)  # 1 or 0
+            selected_option = poll_answer.get('option_ids')[0]
+            score = int(poll.get('correct_option_id') == selected_option)  # 1 or 0
 
-    update_quiz_engagement(poll.get('quiz_id'),
-                           poll.get('question_no'),
-                           score)
-    update_quiz_session(poll.get('quiz_id'),
-                        poll.get('quiz_no'),
-                        poll.get('question_no'),
-                        poll_answer.get('user'),
-                        score)
-    return '', 200
+            question_index = int(poll['question_no'] - 1)
+            engagement[question_index] += 1
+            correct_answers[question_index] += score
+
+            user_id = str(poll_answer.get('user').get('id'))
+            if user_id not in user_answers:
+                user_answers[user_id] = {
+                    'scores': [0] * 5,
+                    'user': poll_answer.get('user')
+                }
+            user_answers[user_id]['scores'][question_index] += score
+        except Exception as e:
+            print(e)
+
+    DB.put_quiz_engagement(quiz_no, engagement, correct_answers)
+    DB.put_quiz_session(quiz_no, user_answers)
 
 
 @app.route('/send-leaderboard', methods=['GET'])
@@ -107,13 +117,7 @@ def send_leaderboard():
 
 
 def leaderboad(quiz_no):
-    results = get_quiz_results(quiz_no)
-    score_map = {}
-    for result in results:
-        users = []
-        for user in result.get('users'):
-            users.append('@' + user.get('username') if user.get('username') else user.get('first_name', ''))
-        score_map[result.get('total_score')] = users
+    score_map = DB.get_quiz_results(quiz_no)
 
     five = " ".join(score_map.get(5, []))
     four = " ".join(score_map.get(4, []))
@@ -133,4 +137,5 @@ def leaderboad(quiz_no):
 
 
 if __name__ == '__main__':
+    print("Started English Quiz Bot")
     app.run()

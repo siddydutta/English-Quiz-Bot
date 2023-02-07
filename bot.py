@@ -38,5 +38,9 @@ def send_message(message_text):
         'text': message_text
     }
     response = requests.get(BASE_URL + '/sendMessage', data=parameters)
-    response_json = response.json()
-    return response_json.get('result')
+    if response.status_code != 200:
+        print(response.text)
+        return None
+    else:
+        response_json = response.json()
+        return response_json.get('result')
